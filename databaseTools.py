@@ -1,3 +1,4 @@
+# Generic interface program to allow any other python program to easily access a MySQL database
 import json
 import mysql.connector
 
