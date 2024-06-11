@@ -1,4 +1,3 @@
-# Generic interface program to allow any other python program to easily access a MySQL database
 import json
 import mysql.connector
 
@@ -35,6 +34,18 @@ class databaseTools:
         result = cursor.fetchall()
         return result
     
+    def selectedfindall(self, tablename, columns):
+        global cursor
+        cursor.execute("SELECT " + columns + " FROM " + tablename + ";")
+        result = cursor.fetchall()
+        return result
+    
+    def orderedselecectedfindall(self, tablename, columns, order):
+        global cursor
+        cursor.execute("SELECT " + columns + " FROM " + tablename + " ORDER BY " + order + ";")
+        result = cursor.fetchall()
+        return result
+
     def find(self, tableName, columnName, value):
         global cursor
         cursor.execute("SELECT * FROM " + tableName + " WHERE " + columnName + " = '" + value + "';")
