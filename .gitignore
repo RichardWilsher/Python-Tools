@@ -5,3 +5,6 @@
 /.gitignore
 .vscode/settings.json
 .gitignore
+._pycache_
+__pycache__/backup.cpython-312.pyc
+__pycache__/databaseTools.cpython-312.pyc

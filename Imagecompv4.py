@@ -36,6 +36,8 @@ unique_count = 0  # Initialize count of unique images
 duplicate_count = 0  # Initialize count of duplicate images
 
 while len(images) > 1:
+    os.system('cls' if os.name == 'nt' else 'clear') # clear the screen
+    print(str(len(images-2)) + " Remaining...") # display the number of images to be processed 
 
     duplicates = []  # Initialize list of duplicate images
     first_image_index = 0  # Start from the first image index
@@ -67,6 +69,7 @@ if len(images) == 1:  # Check if there is only one image left
     shutil.move(os.path.join(basedir, images[0]), os.path.join(basedir, 'images'))  # Move the remaining image to 'images' directory
     unique_count += 1  # Increment unique count
 
+os.system('cls' if os.name == 'nt' else 'clear') # clear the screen
 print("Completed in %.2f seconds" % (time.time() - start_time))  # Print the time taken to complete
 print("Unique images: " + str(unique_count))  # Print the count of unique images
 print("Duplicate images: " + str(duplicate_count))  # Print the count of duplicate images
