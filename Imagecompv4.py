@@ -37,7 +37,7 @@ duplicate_count = 0  # Initialize count of duplicate images
 
 while len(images) > 1:
     os.system('cls' if os.name == 'nt' else 'clear') # clear the screen
-    print(str(len(images-2)) + " Remaining...") # display the number of images to be processed 
+    print(str(len(images)-2) + " Remaining...") # display the number of images to be processed 
 
     duplicates = []  # Initialize list of duplicate images
     first_image_index = 0  # Start from the first image index
