@@ -6,7 +6,7 @@ cursor = None
 
 class databaseTools:
     def __init__(self):
-        with open('dbsettings.json') as json_file:
+        with open('E:\\Settings\\dbsettings.json') as json_file:
             dbsettings = json.load(json_file)
             global connection
             connection = mysql.connector.connect(

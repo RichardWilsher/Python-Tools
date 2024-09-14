@@ -1,6 +1,10 @@
 # Program to read the contents of a MySQL database and write it to a SQL file
 import databaseTools
 
+import time
+
+start_time = time.time()
+
 path = "e:\\temp\\sql\\"
 
 def writefile(filename, contents, prestring, poststring):
@@ -45,3 +49,4 @@ for table in tables:
     
 dbt.close()
 print("Backup Complete")
+print("Completed in %.2f seconds" % (time.time() - start_time))
