@@ -58,6 +58,14 @@ class databaseTools:
         result = cursor.fetchall()
         return result
     
+    def fuzzyfind(self, tableName, value, columnName):
+        global cursor
+        columnName = columnName.upper()
+        value = value.upper().replace("\n", "") 
+        cursor.execute(f"SELECT * FROM {tableName} WHERE UPPER({columnName}) LIKE UPPER('%{value}%');")
+        result = cursor.fetchall()
+        return result
+    
     def describe(self, tableName):
         global cursor
         cursor.execute(f"DESCRIBE {tableName};")
