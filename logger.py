@@ -1,8 +1,7 @@
 import json
 import databaseTools # for future logging to SQL database
 from datetime import datetime
-import log
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 
 dbt = None
 mode = 1 # 1 = file, 2 = database
@@ -11,6 +10,19 @@ events = []
 counter = 0
 database = ""
 filelocation = "e:\\temp\\logs\\"
+
+@dataclass
+class log:
+    id : int
+    importance : int
+    type : str
+    time : str
+    message : str
+# importance:
+# 0 - None
+# 1 - Low
+# 2 - High
+# 3 - Error
 
 class Logger:
 
@@ -29,7 +41,7 @@ class Logger:
         global counter
         global events
         counter += 1
-        recordedlog = log.log(counter, importance, type, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message)
+        recordedlog = log(counter, importance, type, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), message)
         events.append(recordedlog)
 
     def stop(self):
