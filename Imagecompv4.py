@@ -1,75 +1,192 @@
-# program to look through a directory and compare images looking for duplicated images
-import cv2
-import numpy as np
 import os
-import shutil
-import time
+import cv2
+import threading
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from PIL import Image, ImageTk
+from logger import Logger
 
-start_time = time.time()  # Record the start time
+# Initialize logger
+logger = Logger()
+logger.start("image_deduplicator", 1)  # 1 = log to file
 
-basedir = r'e:\temp\Processing'  # Set the base directory
+class ImageDeduplicatorGUI(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Image Deduplicator")
+        self.geometry("900x600")
 
-def get_image_list():
-    """
-    Get a list of images in the base directory
-    :return: List of image filenames
-    """
-    images = []
-    
-    for path in os.listdir(basedir):
-        if os.path.isfile(os.path.join(basedir, path)):
-            images.append(path)
-    return images
+        self.dir_path = ""
+        self.duplicates = []
+        self.current_index = 0
 
-def is_similar(image1, image2):
-    """
-    Check if two images are similar
-    :param image1: First image
-    :param image2: Second image
-    :return: True if images are similar, False otherwise
-    """
-    return image1.shape == image2.shape and not(np.bitwise_xor(image1,image2).any())
+        self.create_widgets()
 
-images = get_image_list()  # Get the initial list of images
+    def create_widgets(self):
+        top_frame = ttk.Frame(self)
+        top_frame.pack(fill="x", pady=10)
 
-unique_count = 0  # Initialize count of unique images
-duplicate_count = 0  # Initialize count of duplicate images
+        ttk.Button(top_frame, text="Select Folder", command=self.select_folder).grid(row=0, column=0, padx=5)
+        ttk.Button(top_frame, text="Scan for Duplicates", command=self.scan_duplicates).grid(row=0, column=1, padx=5)
 
-while len(images) > 1:
-    os.system('cls' if os.name == 'nt' else 'clear') # clear the screen
-    print(str(len(images)-2) + " Remaining...") # display the number of images to be processed 
+        self.progress = ttk.Progressbar(top_frame, length=200, mode='determinate')
+        self.progress.grid(row=0, column=2, padx=5)
 
-    duplicates = []  # Initialize list of duplicate images
-    first_image_index = 0  # Start from the first image index
+        self.listbox = tk.Listbox(self)
+        self.listbox.pack(fill="both", expand=True, padx=10, pady=10)
+        self.listbox.bind("<<ListboxSelect>>", self.show_selected_images)
 
-    if len(images) > 1:  # Check if there are at least 2 images
-        image1_path = os.path.join(basedir, images[first_image_index])  # Get the path of the first image
-        image1 = cv2.imread(image1_path, cv2.IMREAD_UNCHANGED)  # Read the first image with IMREAD_UNCHANGED flag
-        size1 = os.path.getsize(image1_path)  # Get the size of the first image
+        img_frame = ttk.Frame(self)
+        img_frame.pack(fill="x")
 
-        for second_image_index in range(first_image_index + 1, len(images)):
-            image2_path = os.path.join(basedir, images[second_image_index])  # Get the path of the second image
-            size2 = os.path.getsize(image2_path)  # Get the size of the second image
+        self.left_panel = ttk.Label(img_frame, text="Left Image")
+        self.left_panel.pack(side="left", expand=True)
 
-            if size1 == size2:  # Check if sizes are equal
-                image2 = cv2.imread(image2_path, cv2.IMREAD_UNCHANGED)  # Read the second image with IMREAD_UNCHANGED flag
-                if is_similar(image1, image2):  # Check if images are similar
-                    duplicates.append(images[second_image_index])  # Add the second image to duplicates
+        self.right_panel = ttk.Label(img_frame, text="Right Image")
+        self.right_panel.pack(side="right", expand=True)
 
-        if duplicates:  # Check if there are any duplicates
-            for duplicate in duplicates:
-                shutil.move(os.path.join(basedir, duplicate), os.path.join(basedir, 'dupe'))  # Move duplicate images to 'dupe' directory
-                duplicate_count += 1  # Increment duplicate count
-        shutil.move(image1_path, os.path.join(basedir, 'images'))  # Move the first image to 'images' directory
-        unique_count += 1  # Increment unique count
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill="x")
 
-    images = get_image_list()  # Update images for the next iteration
+        self.delete_left_btn = ttk.Button(btn_frame, text="Delete Left", command=self.delete_left, state="disabled")
+        self.delete_left_btn.pack(side="left", padx=10, pady=5)
 
-if len(images) == 1:  # Check if there is only one image left
-    shutil.move(os.path.join(basedir, images[0]), os.path.join(basedir, 'images'))  # Move the remaining image to 'images' directory
-    unique_count += 1  # Increment unique count
+        self.delete_right_btn = ttk.Button(btn_frame, text="Delete Right", command=self.delete_right, state="disabled")
+        self.delete_right_btn.pack(side="left", padx=10, pady=5)
 
-os.system('cls' if os.name == 'nt' else 'clear') # clear the screen
-print("Completed in %.2f seconds" % (time.time() - start_time))  # Print the time taken to complete
-print("Unique images: " + str(unique_count))  # Print the count of unique images
-print("Duplicate images: " + str(duplicate_count))  # Print the count of duplicate images
+        self.skip_btn = ttk.Button(btn_frame, text="Skip", command=self.skip_pair, state="disabled")
+        self.skip_btn.pack(side="left", padx=10, pady=5)
+
+    def select_folder(self):
+        self.dir_path = filedialog.askdirectory()
+
+    def scan_duplicates(self):
+        if not self.dir_path:
+            messagebox.showerror("Error", "Please select a folder first.")
+            return
+
+        self.delete_left_btn.config(state="disabled")
+        self.delete_right_btn.config(state="disabled")
+        self.skip_btn.config(state="disabled")
+        threading.Thread(target=self._scan_duplicates_thread).start()
+
+    def _scan_duplicates_thread(self):
+        image_files = [f for f in os.listdir(self.dir_path)
+                       if os.path.isfile(os.path.join(self.dir_path, f)) and f.lower().endswith((".jpg", ".jpeg", ".png"))]
+        duplicates = []
+        total = len(image_files)
+        checked = 0
+
+        for i in range(total):
+            path1 = os.path.join(self.dir_path, image_files[i])
+            try:
+                img1 = cv2.imread(path1, cv2.IMREAD_UNCHANGED)
+                if img1 is None or img1.size == 0:
+                    logger.log(2, "Read Error", f"Failed to load image: {path1}")
+                    continue
+            except Exception as e:
+                logger.log(3, "Read Exception", f"Error reading image {path1}: {e}")
+                continue
+
+            for j in range(i + 1, total):
+                path2 = os.path.join(self.dir_path, image_files[j])
+                try:
+                    img2 = cv2.imread(path2, cv2.IMREAD_UNCHANGED)
+                    if img2 is None or img2.size == 0:
+                        logger.log(2, "Read Error", f"Failed to load image: {path2}")
+                        continue
+                except Exception as e:
+                    logger.log(3, "Read Exception", f"Error reading image {path2}: {e}")
+                    continue
+
+                if img1.shape == img2.shape and not (cv2.bitwise_xor(img1, img2).any()):
+                    duplicates.append((path1, path2))
+
+            checked += 1
+            self.progress['value'] = (checked / total) * 100
+
+        self.duplicates = duplicates
+        self.progress['value'] = 100
+
+        self.listbox.delete(0, tk.END)
+        for pair in self.duplicates:
+            self.listbox.insert(tk.END, f"{os.path.basename(pair[0])} <-> {os.path.basename(pair[1])}")
+
+        if duplicates:
+            self.delete_left_btn.config(state="normal")
+            self.delete_right_btn.config(state="normal")
+            self.skip_btn.config(state="normal")
+            self.listbox.selection_set(0)
+            self.show_selected_images(None)
+        else:
+            messagebox.showinfo("Done", "No duplicates found.")
+
+    def show_selected_images(self, event):
+        selection = self.listbox.curselection()
+        if not selection:
+            return
+
+        index = selection[0]
+        self.current_index = index
+        path1, path2 = self.duplicates[index]
+
+        self.display_image(path1, self.left_panel)
+        self.display_image(path2, self.right_panel)
+
+    def display_image(self, path, panel):
+        try:
+            image = Image.open(path)
+            image.verify()
+            image = Image.open(path)
+            image.thumbnail((300, 300))
+            photo = ImageTk.PhotoImage(image)
+            panel.image = photo
+            panel.config(image=photo, text="")
+        except Exception as e:
+            logger.log(3, "Image Load", f"Corrupt or invalid image: {path} - {e}")
+            panel.config(text="Invalid or Corrupt Image", image="")
+            panel.image = None
+
+    def delete_left(self):
+        if self.duplicates:
+            path1, path2 = self.duplicates[self.current_index]
+            os.remove(path1)
+            logger.log(1, "Delete", f"Deleted {path1}")
+            self.remove_current_pair()
+
+    def delete_right(self):
+        if self.duplicates:
+            path1, path2 = self.duplicates[self.current_index]
+            os.remove(path2)
+            logger.log(1, "Delete", f"Deleted {path2}")
+            self.remove_current_pair()
+
+    def skip_pair(self):
+        self.remove_current_pair()
+
+    def remove_current_pair(self):
+        if self.duplicates:
+            self.duplicates.pop(self.current_index)
+            self.listbox.delete(self.current_index)
+
+            if self.current_index >= len(self.duplicates):
+                self.current_index = len(self.duplicates) - 1
+
+            if self.duplicates:
+                self.listbox.selection_clear(0, tk.END)
+                self.listbox.selection_set(self.current_index)
+                self.listbox.activate(self.current_index)
+                self.show_selected_images(None)
+            else:
+                self.left_panel.config(text="Left Image", image="")
+                self.right_panel.config(text="Right Image", image="")
+                self.delete_left_btn.config(state="disabled")
+                self.delete_right_btn.config(state="disabled")
+                self.skip_btn.config(state="disabled")
+
+if __name__ == "__main__":
+    try:
+        app = ImageDeduplicatorGUI()
+        app.mainloop()
+    finally:
+        logger.stop()

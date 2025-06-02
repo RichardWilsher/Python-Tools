@@ -1,52 +1,68 @@
 # Program to read the contents of a MySQL database and write it to a SQL file
-import databaseTools
-
+import orm
 import time
+import os
 
 start_time = time.time()
+output_path = "e:\\temp\\sql\\"
 
-path = "e:\\temp\\sql\\"
-
-def writefile(filename, contents, prestring, poststring):
+def writefile(filename, contents, prestring="", poststring=""):
+    os.makedirs(output_path, exist_ok=True)
     new_filename = filename.replace('.', '_')
-    output_path = path + new_filename + ".sql"
-    output_file = open(output_path, 'w', encoding="utf-8")
-    for line in contents:
-        output_file.write(prestring + str(line) + poststring + "\n")
-    output_file.close()
+    filepath = os.path.join(output_path, new_filename + ".sql")
 
-dbt = databaseTools.databaseTools()
-print("Backing up Schemas...")
-schemas = dbt.getSchemas()
-writefile("schemas", schemas, "CREATE SCHEMA `", "`;")
-tables = dbt.getTables()
-for table in tables:
-    print("Backing up " + table)
-    table_results = dbt.describe(table)
-    table_array = []
-    table_array.append("CREATE TABLE " + table + " (")
-    for index, table_result in enumerate(table_results):
-        initial_format = str(table_result)
-        bracket_removal = initial_format[1:-1]
-        stripped_str = ','.join(str(bracket_removal).split(',')[:2])
-        formatted_str = stripped_str.replace("'", "")
-        final_str = formatted_str.replace(",", "")
-        table_sql = str(final_str).replace("None", "NULL")
-        if index != len(table_results) - 1:
-            table_sql += ","
-        table_array.append(table_sql)
-    table_array.append(");")
-    table_contents = dbt.findall(table)
-    for table_content in table_contents:
-        table_sql = "INSERT INTO " + table + " VALUES " + str(table_content).replace("None", "NULL") + ";"
-        table_array.append(table_sql)
-    primarykey = dbt.getprimarykey(table)
-    # print(primarykey)
-    if primarykey != None:
-       query = ("ALTER TABLE " + table + " CHANGE COLUMN " + primarykey[0][4] + " " + primarykey[0][4] + " INT NOT NULL AUTO_INCREMENT , ADD PRIMARY KEY (" + primarykey[0][4] + ");")
-       table_array.append(query)
-    writefile(table, table_array, "", "")
-    
-dbt.close()
-print("Backup Complete")
-print("Completed in %.2f seconds" % (time.time() - start_time))
+    with open(filepath, 'w', encoding="utf-8") as f:
+        for line in contents:
+            f.write(f"{prestring}{line}{poststring}\n")
+
+def format_column_definition(column_tuple):
+    """Extracts name and type from a column tuple for CREATE TABLE."""
+    name, col_type = column_tuple[:2]
+    name = name.strip("' ")
+    col_type = col_type.strip("' ")
+    return f"{name} {col_type if col_type else 'NULL'}"
+
+def main():
+    db = orm.orm()
+    print("Backing up Schemas...")
+    schemas = db.get_schemas()
+    writefile("schemas", schemas, "CREATE SCHEMA `", "`;")
+
+    tables = db.get_tables()
+    for table in tables:
+        print(f"Backing up {table}")
+        temp_table = orm.orm(table)
+
+        # Table structure
+        table_results = temp_table.describe()
+        table_array = [f"CREATE TABLE {table} ("]
+        for i, col in enumerate(table_results):
+            definition = format_column_definition(col)
+            if i < len(table_results) - 1:
+                definition += ","
+            table_array.append(definition)
+        table_array.append(");")
+
+        # Table content
+        for row in temp_table.find():
+            row_str = str(row).replace("None", "NULL")
+            table_array.append(f"INSERT INTO {table} VALUES {row_str};")
+
+        # Primary key
+        primary_key = temp_table.getprimarykey()
+        if primary_key:
+            col_name = primary_key[0][4]
+            alter_stmt = (
+                f"ALTER TABLE {table} CHANGE COLUMN {col_name} {col_name} INT NOT NULL AUTO_INCREMENT, "
+                f"ADD PRIMARY KEY ({col_name});"
+            )
+            table_array.append(alter_stmt)
+
+        writefile(table, table_array)
+
+    db.close()
+    print("Backup Complete")
+    print("Completed in %.2f seconds" % (time.time() - start_time))
+
+if __name__ == "__main__":
+    main()

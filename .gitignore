@@ -5,6 +5,12 @@
 /.gitignore
 .vscode/settings.json
 .gitignore
-._pycache_
+_pycache_
 __pycache__/backup.cpython-312.pyc
 __pycache__/databaseTools.cpython-312.pyc
+/_pycache_
+/_pycache_/logger.cpython-312.pyc
+/_pycache_/orm.cpython-312.pyc
+__pycache__/logger.cpython-312.pyc
+.gitignore
+__pycache__/orm.cpython-312.pyc
